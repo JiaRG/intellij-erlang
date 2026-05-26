@@ -351,7 +351,7 @@ public class ErlangSdkType extends SdkType {
         return null;
       }
 
-      ProcessOutput output = ErlangSystemUtil.getProcessOutput(sdkHome, erl.getAbsolutePath(), "-noshell",
+      ProcessOutput output = ErlangSystemUtil.getProcessOutput(sdkHome, erl.getPath(), "-noshell",
                                                                "-eval", PRINT_VERSION_INFO_EXPRESSION);
       ErlangSdkRelease release = output.getExitCode() != 0 || output.isCancelled() || output.isTimeout()
                                  ? null
@@ -417,7 +417,7 @@ public class ErlangSdkType extends SdkType {
     assert !ApplicationManager.getApplication().isUnitTestMode() : "Failed to setup a mock SDK!";
 
     try {
-      String exePath = JpsErlangSdkType.getByteCodeCompilerExecutable(sdkHome).getAbsolutePath();
+      String exePath = JpsErlangSdkType.getByteCodeCompilerExecutable(sdkHome).getPath();
       ProcessOutput processOutput = ErlangSystemUtil.getProcessOutput(sdkHome, exePath, "-where");
       if (processOutput.getExitCode() == 0) {
         String stdout = processOutput.getStdout().trim();

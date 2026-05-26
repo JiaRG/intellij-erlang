@@ -192,12 +192,14 @@ public class ErlangBuilder extends TargetBuilder<ErlangSourceRootDescriptor, Erl
     JpsSdk<JpsDummyElement> sdk = ErlangTargetBuilderUtil.getSdk(context, module);
     File executable = JpsErlangSdkType.getByteCodeCompilerExecutable(sdk.getHomePath());
     
-    command.add(executable.getAbsolutePath());
+    command.add(executable.getPath());
     addCodePath(command, module, target, context);
     addParseTransforms(command, module);
     addDebugInfo(command, compilerOptions.myAddDebugInfoEnabled);
     addIncludePaths(command, module);
     addMacroDefinitions(command, isTest);
+    command.add("-o");
+    command.add(outputDirectory.getPath());
     command.addAll(compilerOptions.myAdditionalErlcArguments);
     command.addAll(erlangModulePaths);
     return command;

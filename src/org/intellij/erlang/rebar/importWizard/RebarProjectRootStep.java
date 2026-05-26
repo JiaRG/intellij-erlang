@@ -129,7 +129,7 @@ public class RebarProjectRootStep extends ProjectImportWizardStep {
       public void run(@NotNull final ProgressIndicator indicator) {
         String sdkPath = project != null ? ErlangSdkType.getSdkPath(project) : null;
         final String escriptPath = sdkPath != null
-                                   ? JpsErlangSdkType.getScriptInterpreterExecutable(sdkPath).getAbsolutePath()
+                                   ? JpsErlangSdkType.getScriptInterpreterExecutable(sdkPath).getPath()
                                    : RebarRunningStateUtil.findEscriptExecutable();
         indicator.setIndeterminate(true);
         GeneralCommandLine commandLine = new GeneralCommandLine();

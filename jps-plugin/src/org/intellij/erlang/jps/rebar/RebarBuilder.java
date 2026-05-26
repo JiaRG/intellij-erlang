@@ -67,7 +67,7 @@ public class RebarBuilder extends TargetBuilder<ErlangSourceRootDescriptor, Erla
     }
 
     JpsSdk<JpsDummyElement> sdk = ErlangTargetBuilderUtil.getSdk(context, module);
-    String escriptPath = JpsErlangSdkType.getScriptInterpreterExecutable(sdk.getHomePath()).getAbsolutePath();
+    String escriptPath = JpsErlangSdkType.getScriptInterpreterExecutable(sdk.getHomePath()).getPath();
     boolean isRebarRun = false;
     for (String contentRootUrl : module.getContentRootsList().getUrls()) {
       String contentRootPath = JpsPathUtil.urlToPath(contentRootUrl);

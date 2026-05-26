@@ -63,6 +63,11 @@ public class JpsErlangSdkType extends JpsSdkType<JpsDummyElement> implements Jps
     return SystemInfo.isWindows ? executableName + ".exe" : executableName;
   }
 
+  @NotNull
+  private static String getExecutableFileName(@NotNull String sdkHome, @NotNull String executableName) {
+    return SystemInfo.isWindows && !sdkHome.startsWith("/") ? executableName + ".exe" : executableName;
+  }
+
   @TestOnly
   @NotNull
   public static String getTestsSdkPath() {
@@ -79,6 +84,6 @@ public class JpsErlangSdkType extends JpsSdkType<JpsDummyElement> implements Jps
 
   @NotNull
   private static File getSdkExecutable(@NotNull String sdkHome, @NotNull String command) {
-    return new File(new File(sdkHome, "bin"), getExecutableFileName(command));
+    return new File(new File(sdkHome, "bin"), getExecutableFileName(sdkHome, command));
   }
 }

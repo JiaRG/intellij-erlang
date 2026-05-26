@@ -16,6 +16,7 @@
 
 package org.intellij.erlang.console;
 
+import com.intellij.execution.ExecutionException;
 import com.intellij.execution.Executor;
 import com.intellij.execution.configurations.*;
 import com.intellij.execution.runners.ExecutionEnvironment;
@@ -23,14 +24,10 @@ import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.options.SettingsEditor;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.projectRoots.Sdk;
-import com.intellij.openapi.roots.ModuleRootManager;
-import com.intellij.openapi.roots.ProjectRootManager;
 import com.intellij.openapi.util.InvalidDataException;
 import com.intellij.openapi.util.WriteExternalException;
 import com.intellij.util.ObjectUtils;
 import com.intellij.util.xmlb.XmlSerializer;
-import org.intellij.erlang.sdk.ErlangSdkType;
 import org.jdom.Element;
 import org.jetbrains.annotations.NotNull;
 
@@ -72,17 +69,11 @@ public final class ErlangConsoleRunConfiguration extends ModuleBasedConfiguratio
   @Override
   public void checkConfiguration() throws RuntimeConfigurationException {
     Module selectedModule = getConfigurationModule().getModule();
-    if (selectedModule == null) {
-      Sdk projectSdk = ProjectRootManager.getInstance(getProject()).getProjectSdk();
-      if (projectSdk == null || projectSdk.getSdkType() != ErlangSdkType.getInstance()) {
-        throw new RuntimeConfigurationException("Neither Erlang module selected nor Erlang SDK is configured for the project");
-      }
+    try {
+      ErlangConsoleUtil.getErlPath(getProject(), selectedModule);
     }
-    else {
-      Sdk moduleSdk = ModuleRootManager.getInstance(selectedModule).getSdk();
-      if (moduleSdk == null || moduleSdk.getSdkType() != ErlangSdkType.getInstance()) {
-        throw new RuntimeConfigurationException("Erlang SDK is not configured for the selected module");
-      }
+    catch (ExecutionException e) {
+      throw new RuntimeConfigurationException(e.getMessage());
     }
   }
 

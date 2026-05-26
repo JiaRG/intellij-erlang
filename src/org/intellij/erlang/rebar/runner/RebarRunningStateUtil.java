@@ -58,7 +58,7 @@ public class RebarRunningStateUtil {
     RebarSettings rebarSettings = RebarSettings.getInstance(project);
     String sdkPath = ErlangSdkType.getSdkPath(project);
     String escriptPath = sdkPath != null ?
-                         JpsErlangSdkType.getScriptInterpreterExecutable(sdkPath).getAbsolutePath() :
+                         JpsErlangSdkType.getScriptInterpreterExecutable(sdkPath).getPath() :
                          findEscriptExecutable();
     GeneralCommandLine commandLine = new GeneralCommandLine();
 

@@ -19,7 +19,9 @@ package org.intellij.erlang.application;
 import com.intellij.execution.actions.ConfigurationContext;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleUtilCore;
+import com.intellij.openapi.roots.CompilerModuleExtension;
 import com.intellij.openapi.util.text.StringUtil;
+import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
@@ -29,6 +31,7 @@ import org.intellij.erlang.psi.ErlangFunction;
 import org.intellij.erlang.psi.impl.ErlangPsiImplUtil;
 import org.intellij.erlang.runconfig.ErlangDebuggableRunConfigurationProducer;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 public class ErlangApplicationRunConfigurationProducer extends ErlangDebuggableRunConfigurationProducer<ErlangApplicationConfiguration> {
   public ErlangApplicationRunConfigurationProducer() {
@@ -58,7 +61,10 @@ public class ErlangApplicationRunConfigurationProducer extends ErlangDebuggableR
     configuration.setModuleAndFunction(moduleNameAndFunction(moduleName, functionName));
     configuration.setName(moduleName + "." + functionName);
     configuration.setModule(module);
-    configuration.setUseTestCodePath(module != null && module.getModuleTestsWithDependentsScope().contains(vFile));
+    boolean useTestCodePath = module != null && module.getModuleTestsWithDependentsScope().contains(vFile);
+    configuration.setUseTestCodePath(useTestCodePath);
+    configuration.setEntryPointFilePath(vFile.getPath());
+    configuration.setEntryPointOutputPath(getCompileOutputPath(module, vFile, useTestCodePath));
 
     return true;
   }
@@ -79,5 +85,31 @@ public class ErlangApplicationRunConfigurationProducer extends ErlangDebuggableR
   @NotNull
   private static String moduleNameAndFunction(@NotNull String moduleName, @NotNull String functionName) {
     return moduleName + " " + functionName;
+  }
+
+  @NotNull
+  private static String getCompileOutputPath(@Nullable Module module, @NotNull VirtualFile file, boolean useTestCodePath) {
+    if (module != null) {
+      CompilerModuleExtension compilerModuleExtension = CompilerModuleExtension.getInstance(module);
+      String outputUrl = useTestCodePath ?
+                         compilerModuleExtension.getCompilerOutputUrlForTests() :
+                         compilerModuleExtension.getCompilerOutputUrl();
+      if (StringUtil.isNotEmpty(outputUrl)) {
+        return VfsUtilCore.urlToPath(outputUrl);
+      }
+    }
+
+    VirtualFile parent = file.getParent();
+    if (parent == null) return file.getPath();
+
+    VirtualFile appRoot = parent.getParent();
+    if (appRoot != null && "src".equals(parent.getName())) {
+      VirtualFile ebin = appRoot.findChild("ebin");
+      if (ebin != null && ebin.isDirectory()) {
+        return ebin.getPath();
+      }
+    }
+
+    return parent.getPath();
   }
 }

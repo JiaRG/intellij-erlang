@@ -17,15 +17,30 @@
 package org.intellij.erlang.resolve;
 
 
+import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.psi.PsiDirectory;
 import com.intellij.psi.PsiFile;
+import com.intellij.testFramework.LightProjectDescriptor;
+import com.intellij.testFramework.fixtures.DefaultLightProjectDescriptor;
 import org.intellij.erlang.psi.ErlangFile;
 import org.intellij.erlang.psi.impl.ErlangPsiImplUtil;
+import org.intellij.erlang.sdk.ErlangSdkRelease;
+import org.intellij.erlang.sdk.ErlangSdkType;
 import org.intellij.erlang.utils.ErlangLightPlatformCodeInsightFixtureTestCase;
 
 import java.util.List;
 
 public class ErlangIncludeLibResolveTest extends ErlangLightPlatformCodeInsightFixtureTestCase {
+  @Override
+  protected LightProjectDescriptor getProjectDescriptor() {
+    return new DefaultLightProjectDescriptor() {
+      @Override
+      public Sdk getSdk() {
+        return ErlangSdkType.createMockSdk("testData/mockSdk-R15B02/", ErlangSdkRelease.V_R15B02);
+      }
+    };
+  }
+
   @Override
   protected String getTestDataPath() {
     return "testData/resolve/includeLib/";
@@ -53,6 +68,47 @@ public class ErlangIncludeLibResolveTest extends ErlangLightPlatformCodeInsightF
       "testapp-1.0/ebin/testapp.app", "testapp-1.0/include/testapp.hrl",
       "patches/testapp/testapp.app", "patches/include/testapp.hrl");
     doTestAppResolveTest("testapp-1.0");
+  }
+
+  public void testResolveByPathWhenApplicationIndexMisses() {
+    myFixture.configureByFiles("testappuser.erl", "linked/testapp/include/testapp.hrl");
+
+    doTestAppResolveTest("testapp");
+  }
+
+  public void testResolveFromDepsWhenApplicationIndexMisses() {
+    myFixture.configureByFiles("testappuser.erl", "deps/testapp/include/testapp.hrl");
+
+    doTestAppResolveTest("testapp");
+  }
+
+  public void testResolveFromBuildLibWhenApplicationIndexMisses() {
+    myFixture.configureByFiles("testappuser.erl", "_build/emqx-enterprise/lib/testapp/include/testapp.hrl");
+
+    doTestAppResolveTest("testapp");
+  }
+
+  public void testLatestVersionByPathWhenApplicationIndexMisses() {
+    myFixture.configureByFiles("testappuser.erl",
+      "linked/testapp-1.0/include/testapp.hrl",
+      "linked/testapp-2.0/include/testapp.hrl");
+
+    doTestAppResolveTest("testapp-2.0");
+  }
+
+  public void testResolveOtpIncludeLibFromSdk() {
+    setUpProjectSdk();
+    myFixture.configureByText("otp_include_user.erl",
+      "-module(otp_include_user).\n" +
+        "-include_lib(\"eunit/include/eunit.hrl\").\n" +
+        "-include_lib(\"common_test/include/ct.hrl\").\n");
+
+    PsiFile otpIncludeUserErl = myFixture.getFile();
+    assertTrue(otpIncludeUserErl instanceof ErlangFile);
+    List<ErlangFile> directlyIncludedFiles = ErlangPsiImplUtil.getDirectlyIncludedFiles((ErlangFile) otpIncludeUserErl);
+    assertEquals(2, directlyIncludedFiles.size());
+    assertEquals("eunit.hrl", directlyIncludedFiles.get(0).getName());
+    assertEquals("ct.hrl", directlyIncludedFiles.get(1).getName());
   }
 
   private void doTestAppResolveTest(String expectedAppDirName) {

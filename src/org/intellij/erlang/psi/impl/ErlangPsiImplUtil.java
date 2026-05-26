@@ -31,11 +31,18 @@ import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleUtilCore;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.project.ProjectUtil;
+import com.intellij.openapi.projectRoots.Sdk;
+import com.intellij.openapi.roots.ModuleRootManager;
+import com.intellij.openapi.roots.OrderRootType;
+import com.intellij.openapi.roots.ProjectRootManager;
 import com.intellij.openapi.util.*;
 import com.intellij.openapi.util.io.FileUtilRt;
 import com.intellij.openapi.util.text.StringUtil;
+import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.openapi.vfs.VirtualFileManager;
 import com.intellij.patterns.PatternCondition;
 import com.intellij.patterns.PsiElementPattern;
 import com.intellij.psi.*;
@@ -44,6 +51,7 @@ import com.intellij.psi.impl.ResolveScopeManager;
 import com.intellij.psi.impl.source.resolve.reference.ReferenceProvidersRegistry;
 import com.intellij.psi.impl.source.resolve.reference.impl.PsiMultiReference;
 import com.intellij.psi.scope.PsiScopeProcessor;
+import com.intellij.psi.search.FilenameIndex;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.search.LocalSearchScope;
 import com.intellij.psi.search.SearchScope;
@@ -1101,9 +1109,206 @@ public class ErlangPsiImplUtil {
       if (includedFile != null) {
         return new SmartList<>(includedFile);
       }
+      List<ErlangFile> includedFilesByKnownProjectPath = getDirectlyIncludedFilesByKnownProjectPath(project, libName, relativePath);
+      if (!includedFilesByKnownProjectPath.isEmpty()) {
+        return includedFilesByKnownProjectPath;
+      }
+      List<ErlangFile> includedFilesBySdk = getDirectlyIncludedFilesBySdk(project, erlangFile, libName, relativePath);
+      if (!includedFilesBySdk.isEmpty()) {
+        return includedFilesBySdk;
+      }
+      List<ErlangFile> includedFilesByPath = getDirectlyIncludedFilesByIncludeLibPath(project, libName, relativePath);
+      if (!includedFilesByPath.isEmpty()) {
+        return includedFilesByPath;
+      }
     }
     //either include_lib does not specify a library, or it was not found, falling back to 'include' behaviour.
     return getDirectlyIncludedFiles(includeString, erlangFile);
+  }
+
+  @NotNull
+  private static List<ErlangFile> getDirectlyIncludedFilesByKnownProjectPath(@NotNull Project project,
+                                                                             @NotNull String libName,
+                                                                             @NotNull String relativePath) {
+    LinkedHashSet<VirtualFile> roots = new LinkedHashSet<>();
+    ContainerUtil.addIfNotNull(roots, ProjectUtil.guessProjectDir(project));
+    ContainerUtil.addAll(roots, ProjectRootManager.getInstance(project).getContentRoots());
+
+    for (VirtualFile root : roots) {
+      ErlangFile includedFile = getRelativeErlangFile(project, "deps/" + libName + "/" + relativePath, root);
+      if (includedFile != null) return new SmartList<>(includedFile);
+
+      includedFile = getRelativeErlangFile(project, "_checkouts/" + libName + "/" + relativePath, root);
+      if (includedFile != null) return new SmartList<>(includedFile);
+
+      includedFile = getRelativeErlangFile(project, libName + "/" + relativePath, root);
+      if (includedFile != null) return new SmartList<>(includedFile);
+
+      VirtualFile buildRoot = root.findChild("_build");
+      if (buildRoot != null) {
+        for (VirtualFile profileRoot : buildRoot.getChildren()) {
+          includedFile = getRelativeErlangFile(project, "lib/" + libName + "/" + relativePath, profileRoot);
+          if (includedFile != null) return new SmartList<>(includedFile);
+        }
+      }
+    }
+
+    return ContainerUtil.emptyList();
+  }
+
+  @NotNull
+  private static List<ErlangFile> getDirectlyIncludedFilesBySdk(@NotNull Project project,
+                                                                @NotNull ErlangFile erlangFile,
+                                                                @NotNull String libName,
+                                                                @NotNull String relativePath) {
+    for (VirtualFile sdkLibRoot : getSdkLibRoots(project, erlangFile)) {
+      VirtualFile appRoot = findOtpApplicationRoot(sdkLibRoot, libName);
+      ErlangFile includedFile = getRelativeErlangFile(project, relativePath, appRoot);
+      if (includedFile != null) return new SmartList<>(includedFile);
+    }
+    return ContainerUtil.emptyList();
+  }
+
+  @NotNull
+  private static Set<VirtualFile> getSdkLibRoots(@NotNull Project project, @NotNull ErlangFile erlangFile) {
+    LinkedHashSet<VirtualFile> roots = new LinkedHashSet<>();
+    Module module = ModuleUtilCore.findModuleForPsiElement(erlangFile);
+    addSdkLibRoots(roots, module != null ? ModuleRootManager.getInstance(module).getSdk() : null);
+    addSdkLibRoots(roots, ProjectRootManager.getInstance(project).getProjectSdk());
+    return roots;
+  }
+
+  private static void addSdkLibRoots(@NotNull Set<VirtualFile> roots, @Nullable Sdk sdk) {
+    if (sdk == null) return;
+
+    if (sdk.getSdkType() == ErlangSdkType.getInstance()) {
+      addSdkLibRoot(roots, sdk.getHomeDirectory());
+      for (VirtualFile root : sdk.getRootProvider().getFiles(OrderRootType.CLASSES)) {
+        addSdkLibRoot(roots, root);
+      }
+      for (VirtualFile root : sdk.getRootProvider().getFiles(OrderRootType.SOURCES)) {
+        addSdkLibRoot(roots, root);
+      }
+      addSdkHomeLibRoot(roots, sdk.getHomePath());
+      return;
+    }
+
+    String sdkHome = sdk.getHomePath();
+    if (isLikelyElixirSdk(sdk, sdkHome)) {
+      VirtualFile sdkHomeDirectory = sdk.getHomeDirectory();
+      VirtualFile sdkHomeParent = sdkHomeDirectory != null ? sdkHomeDirectory.getParent() : null;
+      addSdkLibRoot(roots, sdkHomeParent != null ? sdkHomeParent.findChild("erlang") : null);
+
+      String erlangSdkHome = inferErlangSdkHomeFromElixirSdkHome(sdkHome);
+      addSdkHomeLibRoot(roots, erlangSdkHome);
+    }
+  }
+
+  private static void addSdkLibRoot(@NotNull Set<VirtualFile> roots, @Nullable VirtualFile root) {
+    if (root == null || !root.isDirectory()) return;
+
+    if ("lib".equals(root.getName())) {
+      roots.add(root);
+    }
+    else {
+      ContainerUtil.addIfNotNull(roots, root.findChild("lib"));
+    }
+  }
+
+  private static void addSdkHomeLibRoot(@NotNull Set<VirtualFile> roots, @Nullable String sdkHome) {
+    if (StringUtil.isEmpty(sdkHome)) return;
+
+    String normalizedSdkHome = PathUtil.toSystemIndependentName(sdkHome);
+    VirtualFile sdkHomeDirectory = VirtualFileManager.getInstance().findFileByUrl(VfsUtilCore.pathToUrl(normalizedSdkHome));
+    if (sdkHomeDirectory == null) {
+      sdkHomeDirectory = LocalFileSystem.getInstance().findFileByPath(normalizedSdkHome);
+    }
+    if (sdkHomeDirectory != null) {
+      addSdkLibRoot(roots, sdkHomeDirectory);
+    }
+  }
+
+  private static boolean isLikelyElixirSdk(@NotNull Sdk sdk, @Nullable String sdkHome) {
+    return StringUtil.containsIgnoreCase(sdk.getSdkType().getName(), "elixir") ||
+           sdkHome != null && StringUtil.containsIgnoreCase(PathUtil.toSystemIndependentName(sdkHome), "/elixir");
+  }
+
+  @Nullable
+  private static String inferErlangSdkHomeFromElixirSdkHome(@Nullable String elixirSdkHome) {
+    if (elixirSdkHome == null) return null;
+
+    String normalizedHome = StringUtil.trimEnd(PathUtil.toSystemIndependentName(elixirSdkHome), "/");
+    String lastSegment = PathUtil.getFileName(normalizedHome);
+    if (!"elixir".equalsIgnoreCase(lastSegment)) return null;
+
+    int lastSeparatorIndex = normalizedHome.lastIndexOf('/');
+    if (lastSeparatorIndex < 0) return null;
+
+    return normalizedHome.substring(0, lastSeparatorIndex) + "/erlang";
+  }
+
+  @Nullable
+  private static VirtualFile findOtpApplicationRoot(@NotNull VirtualFile sdkLibRoot, @NotNull String libName) {
+    VirtualFile unversionedRoot = null;
+    VirtualFile latestVersionedRoot = null;
+    for (VirtualFile child : sdkLibRoot.getChildren()) {
+      if (!child.isDirectory()) continue;
+
+      String childName = child.getName();
+      if (libName.equals(childName)) {
+        unversionedRoot = child;
+        break;
+      }
+      if (childName.startsWith(libName + "-") &&
+          (latestVersionedRoot == null || childName.compareTo(latestVersionedRoot.getName()) > 0)) {
+        latestVersionedRoot = child;
+      }
+    }
+    return unversionedRoot != null ? unversionedRoot : latestVersionedRoot;
+  }
+
+  @NotNull
+  private static List<ErlangFile> getDirectlyIncludedFilesByIncludeLibPath(@NotNull Project project,
+                                                                           @NotNull String libName,
+                                                                           @NotNull String relativePath) {
+    String normalizedRelativePath = PathUtil.toSystemIndependentName(relativePath);
+    String fileName = PathUtil.getFileName(normalizedRelativePath);
+    if (StringUtil.isEmpty(fileName)) return ContainerUtil.emptyList();
+
+    List<Pair<String, ErlangFile>> candidates = new ArrayList<>();
+    for (VirtualFile virtualFile : FilenameIndex.getVirtualFilesByName(fileName, GlobalSearchScope.allScope(project))) {
+      String appDirName = getIncludeLibAppDirName(virtualFile, libName, normalizedRelativePath);
+      if (appDirName == null) continue;
+
+      PsiFile psiFile = PsiManager.getInstance(project).findFile(virtualFile);
+      if (psiFile instanceof ErlangFile) {
+        candidates.add(Pair.create(appDirName, (ErlangFile) psiFile));
+      }
+    }
+
+    if (candidates.isEmpty()) return ContainerUtil.emptyList();
+    candidates.sort((left, right) -> {
+      boolean leftIsUnversioned = libName.equals(left.first);
+      boolean rightIsUnversioned = libName.equals(right.first);
+      if (leftIsUnversioned != rightIsUnversioned) {
+        return leftIsUnversioned ? -1 : 1;
+      }
+      return right.first.compareTo(left.first);
+    });
+    return new SmartList<>(candidates.getFirst().second);
+  }
+
+  @Nullable
+  private static String getIncludeLibAppDirName(@NotNull VirtualFile file,
+                                                @NotNull String libName,
+                                                @NotNull String normalizedRelativePath) {
+    String normalizedPath = PathUtil.toSystemIndependentName(file.getPath());
+    String relativePathSuffix = "/" + normalizedRelativePath;
+    if (!normalizedPath.endsWith(relativePathSuffix)) return null;
+
+    String appDirPath = normalizedPath.substring(0, normalizedPath.length() - relativePathSuffix.length());
+    String appDirName = PathUtil.getFileName(appDirPath);
+    return libName.equals(appDirName) || appDirName.startsWith(libName + "-") ? appDirName : null;
   }
 
   @NotNull

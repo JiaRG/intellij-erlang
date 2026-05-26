@@ -41,6 +41,8 @@ public class ErlangApplicationConfiguration extends ErlangRunConfigurationBase<E
   private String myParams = "";
   private String myModuleAndFunction = "";
   private String myErlFlags = "";
+  private String myEntryPointFilePath = "";
+  private String myEntryPointOutputPath = "";
   private boolean myStopErlang = true;
   private boolean myUseTestCodePath;
 
@@ -98,6 +100,22 @@ public class ErlangApplicationConfiguration extends ErlangRunConfigurationBase<E
 
   public void setErlFlags(String erlFlags) {
     myErlFlags = erlFlags;
+  }
+
+  public String getEntryPointFilePath() {
+    return myEntryPointFilePath;
+  }
+
+  public void setEntryPointFilePath(String entryPointFilePath) {
+    myEntryPointFilePath = entryPointFilePath;
+  }
+
+  public String getEntryPointOutputPath() {
+    return myEntryPointOutputPath;
+  }
+
+  public void setEntryPointOutputPath(String entryPointOutputPath) {
+    myEntryPointOutputPath = entryPointOutputPath;
   }
 
   @Override

@@ -27,14 +27,11 @@ import com.intellij.execution.process.ProcessHandler;
 import com.intellij.execution.runners.ExecutionEnvironment;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.openapi.module.Module;
-import com.intellij.openapi.projectRoots.Sdk;
-import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.util.ObjectUtils;
 import com.intellij.util.SmartList;
 import com.intellij.util.containers.ContainerUtil;
 import org.intellij.erlang.console.ErlangConsoleUtil;
-import org.intellij.erlang.jps.model.JpsErlangSdkType;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -62,6 +59,7 @@ public abstract class ErlangRunningState extends CommandLineState {
     setExePath(commandLine);
     setWorkDirectory(commandLine);
     setCodePath(commandLine);
+    setBeforeEntryPoint(commandLine);
     setEntryPoint(commandLine);
     setStopErlang(commandLine);
     setNoShellMode(commandLine);
@@ -94,6 +92,9 @@ public abstract class ErlangRunningState extends CommandLineState {
   @Nullable
   protected abstract String getWorkDirectory();
 
+  protected void setBeforeEntryPoint(@NotNull GeneralCommandLine commandLine) throws ExecutionException {
+  }
+
   public ErlangEntryPoint getDebugEntryPoint() throws ExecutionException {
     return getEntryPoint();
   }
@@ -103,12 +104,7 @@ public abstract class ErlangRunningState extends CommandLineState {
   }
 
   public final void setExePath(GeneralCommandLine commandLine) throws ExecutionException {
-    Sdk sdk = ModuleRootManager.getInstance(myModule).getSdk();
-    String homePath = sdk != null ? sdk.getHomePath() : null;
-    if (homePath == null) {
-      throw new ExecutionException("Invalid module SDK.");
-    }
-    commandLine.setExePath(JpsErlangSdkType.getByteCodeInterpreterExecutable(homePath).getAbsolutePath());
+    commandLine.setExePath(ErlangConsoleUtil.getErlPath(myModule.getProject(), myModule));
   }
 
   public final void setWorkDirectory(GeneralCommandLine commandLine) {
@@ -128,9 +124,18 @@ public abstract class ErlangRunningState extends CommandLineState {
 
   private void setEntryPoint(GeneralCommandLine commandLine) throws ExecutionException {
     ErlangEntryPoint entryPoint = getEntryPoint();
-    commandLine.addParameters("-eval",
-      entryPoint.getModuleName() + ":" + entryPoint.getFunctionName() +
-        "(" + StringUtil.join(entryPoint.getArgsList(), ", ") + ").");
+    commandLine.addParameters("-eval", getEntryPointExpression(entryPoint));
+  }
+
+  @NotNull
+  protected String getEntryPointExpression(@NotNull ErlangEntryPoint entryPoint) {
+    return getEntryPointCall(entryPoint) + ".";
+  }
+
+  @NotNull
+  protected static String getEntryPointCall(@NotNull ErlangEntryPoint entryPoint) {
+    return entryPoint.getModuleName() + ":" + entryPoint.getFunctionName() +
+      "(" + StringUtil.join(entryPoint.getArgsList(), ", ") + ")";
   }
 
   public final void setErlangFlags(GeneralCommandLine commandLine) {

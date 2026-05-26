@@ -1,0 +1,4 @@
+-ifndef(CT_HRL).
+-define(CT_HRL, true).
+-define(config(Key, Config), proplists:get_value(Key, Config)).
+-endif.
