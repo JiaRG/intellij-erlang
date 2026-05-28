@@ -29,6 +29,21 @@ public class ErlangConsoleUtilTest extends TestCase {
                  ErlangConsoleUtil.getProcessPath("\\\\devcontainer.ij\\2b826ebed049@\\workspaces\\emqx\\apps\\emqx_license"));
   }
 
+  public void testDevContainerWslPathIsConvertedToProcessPath() {
+    assertEquals("/workspaces/emqx/apps/emqx_license",
+                 ErlangConsoleUtil.getProcessPath("//devcontainer.ij/2b826ebed049@wsl~Ubuntu/workspaces/emqx/apps/emqx_license"));
+  }
+
+  public void testDevContainerWslExecutablePathIsConvertedToProcessPath() {
+    assertEquals("/usr/local/lib/erlang/bin/erl",
+                 ErlangConsoleUtil.getProcessPath("//devcontainer.ij/2b826ebed049@wsl~Ubuntu/usr/local/lib/erlang/bin/erl"));
+  }
+
+  public void testDevContainerWslUncPathIsConvertedToProcessPath() {
+    assertEquals("/workspaces/emqx/apps/emqx_license",
+                 ErlangConsoleUtil.getProcessPath("\\\\devcontainer.ij\\2b826ebed049@wsl~Ubuntu\\workspaces\\emqx\\apps\\emqx_license"));
+  }
+
   public void testLocalPathIsPreserved() {
     assertEquals("E:/workspace/intellij-erlang",
                  ErlangConsoleUtil.getProcessPath("E:\\workspace\\intellij-erlang"));

@@ -264,9 +264,12 @@ public final class ErlangConsoleUtil {
   @NotNull
   public static String getProcessPath(@NotNull String path) {
     String normalizedPath = PathUtil.toSystemIndependentName(path);
-    int remoteRootStart = normalizedPath.indexOf("@/");
-    if ((normalizedPath.startsWith("//") || normalizedPath.startsWith("\\\\")) && remoteRootStart >= 0) {
-      return normalizedPath.substring(remoteRootStart + 1);
+    if (normalizedPath.startsWith("//")) {
+      int remoteRootMarker = normalizedPath.indexOf('@');
+      int remoteRootStart = remoteRootMarker >= 0 ? normalizedPath.indexOf('/', remoteRootMarker) : -1;
+      if (remoteRootStart >= 0) {
+        return normalizedPath.substring(remoteRootStart);
+      }
     }
     return normalizedPath;
   }
